@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { ScrollArea } from './components/ui/scroll-area';
 import { Separator } from './components/ui/separator';
 import { Send, Globe, Star } from 'lucide-react';
@@ -7,6 +8,7 @@ import { processUserMessage } from './lib/travelAgentTool';
 
 function App() {
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -26,6 +28,7 @@ function App() {
 
   const handleMessage = async (userInput: string) => {
     try {
+      setIsLoading(true);
       const newUserMessage = {
         id: messages.length + 1,
         text: userInput,
@@ -39,7 +42,8 @@ function App() {
         id: botMessageId,
         text: '',
         sender: 'bot',
-        timestamp: new Date()
+        timestamp: new Date(),
+        isLoading: true
       }]);
 
       await processUserMessage(
@@ -48,7 +52,7 @@ function App() {
         (chunk: string) => {
           setMessages(prev => prev.map(msg => 
             msg.id === botMessageId 
-              ? { ...msg, text: msg.text + chunk }
+              ? { ...msg, text: msg.text + chunk, isLoading: false }
               : msg
           ));
         }
@@ -62,6 +66,8 @@ function App() {
         sender: 'bot',
         timestamp: new Date()
       }]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -165,7 +171,14 @@ function App() {
                       : 'bg-gray-100 text-gray-900'
                   }`}
                 >
-                  {message.text}
+                  <ReactMarkdown>{message.text}</ReactMarkdown>
+                  {message.isLoading && (
+                    <div className="mt-2 flex gap-1">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -179,13 +192,17 @@ function App() {
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+              onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleSend()}
               placeholder="Ask me anything about your travel plans..."
               className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isLoading}
             />
             <button
               onClick={handleSend}
-              className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition-colors"
+              disabled={isLoading}
+              className={`${
+                isLoading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
+              } text-white p-2 rounded-lg transition-colors`}
             >
               <Send className="w-5 h-5" />
             </button>

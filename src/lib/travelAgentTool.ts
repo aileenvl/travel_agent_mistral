@@ -3,7 +3,7 @@ import { generateText, tool, streamText } from 'ai';
 import { z } from 'zod';
 import { createOramaProvider } from './oramaProvider';
 
-const MISTRAL_API_KEY = import.meta.env.VITE_MISTRAL_API_KEY;
+const MISTRAL_API_KEY = 'gXjXGEaRQJKMCeD7JjCfoNed4bqP59uU';
 
 const mistralProvider = createMistral({
   apiKey: MISTRAL_API_KEY
@@ -28,29 +28,19 @@ const searchTool = tool({
       for await (const chunk of response.textStream) {
         try {
           const text = chunk.toString();
-          // Handle both JSON and plain text responses
-          if (text.startsWith('data: ')) {
-            const event = text.split('data: ')[1];
-            try {
-              const parsed = JSON.parse(event);
-              if (parsed.type === 'text' && parsed.message) {
-                result += parsed.message;
-              }
-            } catch {
-              // If JSON parsing fails, treat it as plain text
-              result += event.trim();
+          const event = text.split('data: ')[1];
+          if (event) {
+            const parsed = JSON.parse(event);
+            if (parsed.type === 'text' && parsed.message) {
+              result += parsed.message;
             }
-          } else {
-            // Handle plain text responses
-            result += text.trim();
           }
         } catch (e) {
-          console.warn('Error processing chunk:', e);
+          console.warn('Error parsing chunk:', e);
         }
       }
     } catch (e) {
       console.error('Stream error:', e);
-      throw new Error(`Failed to process search results: ${e.message}`);
     }
 
     return {
@@ -90,7 +80,13 @@ export async function processUserMessage(userInput: string, context: any, onChun
       checkFlights: flightTool
     },
     maxSteps: 5,
-    system: `You are a travel agent helping users plan their trips. Current context: ${JSON.stringify(context)}`,
+    system: `You are a travel agent helping users plan their trips. Current context: ${
+      context ? JSON.stringify({
+        stage: context.stage,
+        selectedCity: context.selectedCity,
+        fromCity: context.fromCity
+      }) : '{}'
+    }`,
     prompt: userInput,
     onStepFinish: ({ text }) => {
       if (onChunk && text) {
