@@ -9,6 +9,16 @@ const mistralProvider = createMistral({
   apiKey: MISTRAL_API_KEY
 });
 
+interface TravelContext {
+  stage: 'initial' | 'destination_search' | 'location_confirmed' | 'dates_needed' | 'flights_search';
+  selectedDestination?: string;
+  fromLocation?: string;
+  dates?: {
+    departure?: string;
+    return?: string;
+  };
+}
+
 const searchTool = tool({
   description: 'Search for travel destinations and attractions',
   parameters: z.object({
@@ -47,7 +57,7 @@ const searchTool = tool({
       type,
       query,
       result: type === 'destination' 
-        ? `Here are some destinations that match your search:\n\n${result}`
+        ? `Here are some destinations that match your search:\n\n${result}\n\nWhere will you be traveling from?`
         : `Here are some attractions in ${query}:\n\n${result}`
     };
   }
@@ -70,7 +80,7 @@ const flightTool = tool({
   }
 });
 
-export async function processUserMessage(userInput: string, context: any, onChunk?: (chunk: string) => void) {
+export async function processUserMessage(userInput: string, context: TravelContext, onChunk?: (chunk: string) => void) {
   const { text, steps } = await generateText({
     model: mistralProvider('mistral-large-latest', { 
       structuredOutputs: true 
@@ -80,13 +90,12 @@ export async function processUserMessage(userInput: string, context: any, onChun
       checkFlights: flightTool
     },
     maxSteps: 5,
-    system: `You are a travel agent helping users plan their trips. Current context: ${
-      context ? JSON.stringify({
-        stage: context.stage,
-        selectedCity: context.selectedCity,
-        fromCity: context.fromCity
-      }) : '{}'
-    }`,
+    system: `You are a travel agent helping users plan their trips. Ask follow-up questions based on context:
+    - If no destination: Ask about travel preferences and suggest destinations
+    - If destination but no departure: Ask for departure city
+    - If destination and departure: Ask for travel dates
+    - If all info available: Search flights
+    Current context: ${JSON.stringify(context)}`,
     prompt: userInput,
     onStepFinish: ({ text }) => {
       if (onChunk && text) {

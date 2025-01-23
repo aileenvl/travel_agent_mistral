@@ -19,12 +19,9 @@ function App() {
     }
   ]);
   const [inputText, setInputText] = useState('');
-  const [currentContext, setCurrentContext] = useState<{
-    stage: 'initial' | 'city_selected' | 'dates_needed' | 'flights_ready';
-    selectedCity?: string;
-    fromCity?: string;
-    dates?: { departure: Date; return: Date };
-  }>({ stage: 'initial' });
+  const [context, setContext] = useState<TravelContext>({
+    stage: 'initial'
+  });
 
   const handleMessage = async (userInput: string) => {
     try {
@@ -36,28 +33,17 @@ function App() {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, newUserMessage]);
-
-      const botMessageId = messages.length + 2;
-      setMessages(prev => [...prev, {
-        id: botMessageId,
-        text: '',
-        sender: 'bot',
-        timestamp: new Date(),
-        isLoading: true
-      }]);
-
-      await processUserMessage(
-        userInput, 
-        currentContext,
-        (chunk: string) => {
-          setMessages(prev => prev.map(msg => 
-            msg.id === botMessageId 
-              ? { ...msg, text: msg.text + chunk, isLoading: false }
-              : msg
-          ));
-        }
-      );
-
+  
+      const result = await processUserMessage(userInput, context, (chunk) => {
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          text: chunk,
+          sender: 'bot',
+          timestamp: new Date()
+        }]);
+      });
+  
+      setContext(result.updatedContext);
     } catch (error) {
       console.error('Error:', error);
       setMessages(prev => [...prev, {
@@ -161,17 +147,41 @@ function App() {
       <div className="flex-1 flex flex-col">
         {/* Chat Messages */}
         <ScrollArea className="flex-1 p-4">
-          <div className="space-y-4">
+          <div className="space-y-4 max-w-3xl mx-auto w-full">
             {messages.map((message) => (
-              <div key={message.id} className="mb-4">
+              <div 
+                key={message.id} 
+                className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
                 <div
-                  className={`rounded-lg p-4 ${
+                  className={`rounded-lg p-4 max-w-[80%] ${
                     message.sender === 'user'
                       ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-900'
+                      : 'bg-white shadow-sm border border-gray-200'
                   }`}
                 >
-                  <ReactMarkdown>{message.text}</ReactMarkdown>
+                  <div className="prose prose-sm max-w-none">
+                    <ReactMarkdown 
+                      components={{
+                        p: ({children}) => <p className="m-0">{children}</p>
+                      }}
+                    >
+                      {message.text}
+                    </ReactMarkdown>
+                  </div>
+                  {message.suggestions && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {message.suggestions.map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          onClick={() => handleMessage(suggestion)}
+                          className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {message.isLoading && (
                     <div className="mt-2 flex gap-1">
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
@@ -187,7 +197,7 @@ function App() {
 
         {/* Input Area */}
         <div className="border-t border-gray-200 p-4 bg-white">
-          <div className="flex gap-4">
+          <div className="flex gap-4 max-w-3xl mx-auto">
             <input
               type="text"
               value={inputText}
