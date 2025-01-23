@@ -5,6 +5,7 @@ import { Separator } from './components/ui/separator';
 import { Send, Globe, Star } from 'lucide-react';
 import type { Message } from './types';
 import { processUserMessage } from './lib/travelAgentTool';
+import { FlightResults } from './components/FlightResults';
 
 function App() {
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
@@ -168,6 +169,7 @@ function App() {
                     >
                       {message.text}
                     </ReactMarkdown>
+                    {message.flights && <FlightResults flights={message.flights} />}
                   </div>
                   {message.suggestions && (
                     <div className="mt-3 flex flex-wrap gap-2">
