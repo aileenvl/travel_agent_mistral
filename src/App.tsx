@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { ScrollArea } from './components/ui/scroll-area';
 import { Separator } from './components/ui/separator';
@@ -23,10 +23,22 @@ function App() {
   const [context, setContext] = useState<TravelContext>({
     stage: 'initial'
   });
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isTyping, setIsTyping] = useState(false);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   const handleMessage = async (userInput: string) => {
     try {
       setIsLoading(true);
+      setIsTyping(true);
+      
       const newUserMessage = {
         id: messages.length + 1,
         text: userInput,
@@ -34,16 +46,44 @@ function App() {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, newUserMessage]);
-  
+
+      let accumulatedText = '';
       const result = await processUserMessage(userInput, context, (chunk) => {
-        setMessages(prev => [...prev, {
-          id: Date.now(),
-          text: chunk,
-          sender: 'bot',
-          timestamp: new Date()
-        }]);
+        if (chunk.trim()) {
+          accumulatedText += chunk;
+          setMessages(prev => {
+            const lastMessage = prev[prev.length - 1];
+            if (lastMessage.sender === 'bot' && lastMessage.isTyping) {
+              return [...prev.slice(0, -1), {
+                ...lastMessage,
+                text: accumulatedText
+              }];
+            } else {
+              return [...prev, {
+                id: Date.now(),
+                text: accumulatedText,
+                sender: 'bot',
+                timestamp: new Date(),
+                isTyping: true
+              }];
+            }
+          });
+        }
       });
-  
+
+      setMessages(prev => {
+        const lastMessage = prev[prev.length - 1];
+        if (lastMessage.sender === 'bot') {
+          return [...prev.slice(0, -1), {
+            ...lastMessage,
+            isTyping: false,
+            flights: result.steps?.find(step => step.tool === 'checkFlights')?.output?.flights,
+            searchResults: result.steps?.find(step => step.tool === 'search')?.output?.result
+          }];
+        }
+        return prev;
+      });
+
       setContext(result.updatedContext);
     } catch (error) {
       console.error('Error:', error);
@@ -55,6 +95,7 @@ function App() {
       }]);
     } finally {
       setIsLoading(false);
+      setIsTyping(false);
     }
   };
 
@@ -64,7 +105,6 @@ function App() {
       setInputText('');
     }
   };
-
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -170,6 +210,13 @@ function App() {
                       {message.text}
                     </ReactMarkdown>
                     {message.flights && <FlightResults flights={message.flights} />}
+                    {message.searchResults && (
+                      <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                        <ReactMarkdown>
+                          {message.searchResults}
+                        </ReactMarkdown>
+                      </div>
+                    )}
                   </div>
                   {message.suggestions && (
                     <div className="mt-3 flex flex-wrap gap-2">
@@ -184,7 +231,7 @@ function App() {
                       ))}
                     </div>
                   )}
-                  {message.isLoading && (
+                  {message.isTyping && (
                     <div className="mt-2 flex gap-1">
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
@@ -194,6 +241,7 @@ function App() {
                 </div>
               </div>
             ))}
+            <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
 
@@ -205,15 +253,15 @@ function App() {
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleSend()}
-              placeholder="Ask me anything about your travel plans..."
+              placeholder={isTyping ? "AI is typing..." : "Ask me anything about your travel plans..."}
               className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={isLoading}
+              disabled={isLoading || isTyping}
             />
             <button
               onClick={handleSend}
-              disabled={isLoading}
+              disabled={isLoading || isTyping}
               className={`${
-                isLoading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
+                isLoading || isTyping ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
               } text-white p-2 rounded-lg transition-colors`}
             >
               <Send className="w-5 h-5" />

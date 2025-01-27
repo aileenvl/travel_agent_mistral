@@ -117,17 +117,14 @@ Remember:
     const parsed = JSON.parse(jsonString);
     console.log('Parsed Intent:', parsed);
     
-    // Validate and adjust dates if necessary
     if (parsed.type === 'provide_dates' && parsed.data.dates) {
       const today = new Date();
       const departure = new Date(parsed.data.dates.departure);
       
-      // If dates are in the past, adjust to next year
       if (departure < today) {
         departure.setFullYear(departure.getFullYear() + 1);
         parsed.data.dates.departure = formatDate(departure);
         
-        // Adjust return date if provided
         if (parsed.data.dates.return) {
           const returnDate = new Date(parsed.data.dates.return);
           returnDate.setFullYear(departure.getFullYear());
